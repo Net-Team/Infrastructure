@@ -52,7 +52,7 @@ namespace Infrastructure.Utility
         /// <param name="numOnly">是否只是字母</param>
         /// <param name="Length">验证码长度</param>
         /// <returns></returns>
-        public static string NewValidCode(bool numOnly,int Length = 4)
+        public static string NewValidCode(bool numOnly, int Length = 4)
         {
             var num = new char[] { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9' };
             var letter = new char[] { 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z' };
@@ -62,6 +62,11 @@ namespace Infrastructure.Utility
             var chars = Enumerable.Range(0, Length).Select(i => ran.Next(0, sources.Length - 1)).Select(i => sources[i]).ToArray();
             return new string(chars);
         }
+
+        #region Core 输出图片 byte[]
+
+        #endregion
+
 
         #region Core 暂时不支持 Bitmap
 
