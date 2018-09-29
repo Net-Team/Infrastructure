@@ -100,7 +100,7 @@ namespace Infrastructure.Utility
         }
 
         /// <summary>
-        /// 获取所有缓存数据
+        /// 根据条件查询缓存数据
         /// </summary>
         /// <returns></returns>
         public virtual IEnumerable<T> Where(Func<KeyValuePair<string, object>, bool> where)
