@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.Caching;
+using System.Threading.Tasks;
 
 namespace Infrastructure.Utility
 {
@@ -12,138 +13,178 @@ namespace Infrastructure.Utility
     public class MemoryCaches<T>
     {
         /// <summary>
-        /// 缓存前缀
+        /// 异步锁
         /// </summary>
-        private static readonly string _prefix = "Cache_";
-
-        /// <summary>
-        /// 同步锁
-        /// </summary>
-        public readonly object SyncRoot = new object();
+        private readonly AsyncRoot asyncRoot = new AsyncRoot();
 
         /// <summary>
         /// 创建缓存对象
         /// </summary>
-        private MemoryCache memoryCaches { get; set; }
+        private readonly MemoryCache memoryCaches;
 
         /// <summary>
         /// 缓存过期时间设置,默认1分钟
         /// </summary>
-        private TimeSpan timeSpan { get; set; } = TimeSpan.FromMinutes(1);
+        private TimeSpan ExpireTime { get; set; }
 
         /// <summary>
-        /// 构造函数，默认过期时间 1分钟
+        /// 获取过期时间
         /// </summary>
-        /// <param name="Tkey"></param>
-        public MemoryCaches(string Tkey)
+        /// <returns></returns>
+        private DateTimeOffset GetDateTimeOffset()
         {
-            var keyValue = MergeKey(Tkey);
-            this.memoryCaches = new MemoryCache(keyValue);
+            return DateTimeOffset.Now.Add(this.ExpireTime);
+        }
+
+
+        /// <summary>
+        /// 构造随机缓存名，默认过期时间 5分钟
+        /// </summary>
+        public MemoryCaches()
+           : this(Guid.NewGuid().ToString(), TimeSpan.FromMinutes(5))
+        {
         }
 
         /// <summary>
-        /// 构造函数，自定义默认过期时间
+        /// 构造随机缓存名，指定过期时间
         /// </summary>
-        /// <param name="Tkey"></param>
-        /// <param name="timeSpan"></param>
-        public MemoryCaches(string Tkey, TimeSpan timeSpan)
+        public MemoryCaches(TimeSpan expireTime)
+           : this(Guid.NewGuid().ToString(), expireTime)
         {
-            var keyValue = MergeKey(Tkey);
-            this.memoryCaches = new MemoryCache(keyValue);
-            this.timeSpan = timeSpan;
         }
 
         /// <summary>
-        /// 添加缓存
+        /// 构造自定义缓存名,默认过期时间 5分钟
+        /// </summary>
+        /// <param name="name"></param>
+        public MemoryCaches(string name)
+            : this(name, TimeSpan.FromMinutes(5))
+        {
+        }
+
+        /// <summary>
+        /// 构造自定义缓存名,指定过期时间
+        /// </summary>
+        /// <param name="name"></param>
+        public MemoryCaches(string name, TimeSpan expireTime)
+        {
+            this.ExpireTime = expireTime;
+            this.memoryCaches = new MemoryCache(name);
+        }
+
+
+        /// <summary>
+        /// 同步方式获取或添加缓存
         /// </summary>
         /// <param name="key">缓存唯一Key</param>
         /// <param name="data">缓存内容</param>
         /// <param name="timeSpan"></param>
-        public virtual void AddOrUpdate(string key, T data)
+        public T GetOrAdd(string key, Func<T> factory)
         {
-            lock (this.SyncRoot)
+            using (asyncRoot.Lock())
             {
-                if (this.memoryCaches.Any(item => item.Key == key))
+                var value = this.memoryCaches.Get(key) as CacheValue;
+                if (value == null)
                 {
-                    this.Update(key, data);
+
+                    value = new CacheValue { Value = factory() };
+                    this.memoryCaches.Add(key, value, this.GetDateTimeOffset());
                 }
-                else
-                {
-                    this.memoryCaches.Add(key, data, DateTimeOffset.Now.Add(timeSpan));
-                }
+                return value.Value;
             }
         }
 
         /// <summary>
-        /// 更新缓存数据
+        /// 异步方式获取或添加缓存
         /// </summary>
         /// <param name="key">缓存唯一Key</param>
         /// <param name="data">缓存内容</param>
-        private void Update(string key, T data)
+        /// <param name="timeSpan"></param>
+        public async Task<T> GetOrAddAsync(string key, Func<Task<T>> factory)
         {
-            lock (this.SyncRoot)
+            using (await asyncRoot.LockAsync())
             {
-                this.memoryCaches.Set(key, data, DateTimeOffset.Now.Add(timeSpan));
-            }
-        }
-
-        /// <summary>
-        /// 删除缓存数据
-        /// </summary>
-        /// <param name="key">缓存唯一Key</param>
-        public virtual void Delete(string key)
-        {
-            lock (this.SyncRoot)
-            {
-                this.memoryCaches.Remove(key);
-            }
-        }
-
-        /// <summary>
-        /// 根据条件查询缓存数据
-        /// </summary>
-        /// <returns></returns>
-        public virtual IEnumerable<T> Where(Func<KeyValuePair<string, object>, bool> where)
-        {
-            lock (this.SyncRoot)
-            {
-                var values = this.memoryCaches.Where(where).ToList();
-                foreach (var item in values)
+                var value = this.memoryCaches.Get(key) as CacheValue;
+                if (value == null)
                 {
-                    yield return (T)item.Value;
+                    var cache = await factory();
+                    value = new CacheValue { Value = cache };
+                    this.memoryCaches.Add(key, value, this.GetDateTimeOffset());
                 }
+                return value.Value;
+            }
+        }
+
+
+        /// <summary>
+        /// 同步方式获取或添加缓存
+        /// </summary>
+        /// <param name="key">缓存唯一Key</param>
+        /// <param name="data">缓存内容</param>
+        /// <param name="timeSpan"></param>
+        public void AddOrUpdate(string key, T data)
+        {
+            using (asyncRoot.Lock())
+            {
+                var value = new CacheValue { Value = data };
+                this.memoryCaches.Set(key, value, this.GetDateTimeOffset());
             }
         }
 
         /// <summary>
-        /// 获取缓存数据
+        /// 根据Key 获取对象
         /// </summary>
-        /// <param name="key">缓存唯一Key</param>
+        /// <param name="key"></param>
         /// <returns></returns>
-        public virtual T Get(string key)
+        public T Get(string key)
         {
-            lock (this.SyncRoot)
+            using (asyncRoot.Lock())
             {
-                var obj = this.memoryCaches.Get(key);
-                if (obj == null)
+                var value = this.memoryCaches.Get(key) as CacheValue;
+                if (value == null)
                 {
                     return default(T);
                 }
-                else
-                {
-                    return (T)obj;
-                }
+                return value.Value;
             }
         }
 
         /// <summary>
-        /// 获取数据库名
+        /// 异步方式获取或添加缓存
         /// </summary>
-        /// <param name="name"></param>
-        /// <returns></returns>
-        private static string MergeKey(string name)
+        /// <param name="key">缓存唯一Key</param>
+        /// <param name="data">缓存内容</param>
+        /// <param name="timeSpan"></param>
+        public async Task<T> AddOrUpdateAsync(string key, Func<Task<T>> factory)
         {
-            return $"{_prefix}{name}";
+            using (await asyncRoot.LockAsync())
+            {
+                var value = this.memoryCaches.Get(key) as CacheValue;
+                if (value == null)
+                {
+                    var cache = await factory();
+                    value = new CacheValue { Value = cache };
+                    this.memoryCaches.Add(key, value, this.GetDateTimeOffset());
+                }
+                return value.Value;
+            }
+        }
+
+        /// <summary>
+        /// 根据Key删除指定缓存
+        /// </summary>
+        /// <param name="key">缓存唯一Key</param>
+        public void Delete(string key)
+        {
+            this.memoryCaches.Remove(key);
+        }
+
+        /// <summary>
+        /// 缓存值
+        /// </summary>
+        class CacheValue
+        {
+            public T Value { get; set; }
         }
     }
 }
