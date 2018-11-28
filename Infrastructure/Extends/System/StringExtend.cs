@@ -330,5 +330,19 @@ namespace System
                 return m.Value.ToLower();
             });
         }
+
+        /// <summary>
+        /// 对字符串中url特殊字符进行替换
+        /// </summary>
+        /// <param name="strUrl">Url 值或参数</param>
+        /// <param name="replaceValue">特殊符替换为</param>
+        /// <returns></returns>
+        public static string UrlReplace(this string source, string replaceValue = "")
+        {
+            return source.Replace("+", replaceValue).Replace(" ", replaceValue).Replace("/", replaceValue)
+                .Replace("?", replaceValue).Replace("%", replaceValue)
+                .Replace("#", replaceValue).Replace("&", replaceValue)
+                .Replace("=", replaceValue);
+        }
     }
 }

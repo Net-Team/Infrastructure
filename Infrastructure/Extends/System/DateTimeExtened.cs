@@ -138,9 +138,20 @@ namespace System
         /// <returns></returns>  
         public static long ToTimeStamp(this DateTime dt)
         {
-            DateTime dateStart = new DateTime(1970, 1, 1, 8, 0, 0);
-            var timeStamp = Convert.ToInt64((dt - dateStart).TotalMilliseconds);
-            return timeStamp;
+            System.DateTime startTime = TimeZone.CurrentTimeZone.ToLocalTime(new System.DateTime(1970, 1, 1)); // 当地时区
+            return (long)(dt.ToLocalTime() - startTime).TotalMilliseconds;
+        }
+
+        // <summary>  
+        /// Unix时间戳转换为DateTime
+        /// </summary>  
+        /// <param name="timeStamp">Unix时间戳</param>  
+        /// <returns></returns>  
+        public static DateTime UnixToDateTime(this long timeStamp)
+        {
+            DateTime dtStart = TimeZone.CurrentTimeZone.ToLocalTime(new DateTime(1970, 1, 1));
+            DateTime targetDt = dtStart.AddMilliseconds(timeStamp);
+            return targetDt;
         }
     }
 }
